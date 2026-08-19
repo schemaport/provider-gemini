@@ -1,0 +1,60 @@
+{
+  "name": "@schemaport/provider-gemini",
+  "version": "0.1.0",
+  "description": "Gemini function-declaration compatibility checks, compilation and live probing for SchemaPort.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "docs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schemaport/provider-gemini.git"
+  },
+  "keywords": [
+    "schemaport",
+    "json-schema",
+    "tool-calling",
+    "llm",
+    "ai"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . && tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@google/genai": "^2.17.1",
+    "@schemaport/core": "^0.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^26.0.0",
+    "eslint": "^10.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.0.0"
+  }
+}
