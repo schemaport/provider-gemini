@@ -12,10 +12,10 @@ than a guess.
 | --- | --- |
 | <https://ai.google.dev/gemini-api/docs/function-calling> | "Only a subset of the OpenAPI schema is supported"; function-calling modes `auto`, `any`, `none`, `validated`; "For `any` mode, the API may reject very large or deeply nested schemas". |
 | <https://ai.google.dev/api/caching#FunctionDeclaration> | the `FunctionDeclaration` reference the function-calling guide links to as the definition of the supported subset. |
-| <https://ai.google.dev/api/caching#Schema> | the `Schema` reference. |
+| <https://ai.google.dev/api/caching#Schema> | the `Schema` reference. The page renders client side, so this anchor could not be confirmed during review; the discovery document below was used for the field list instead, and no diagnostic cites this URL. |
 | <https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta> | **machine-readable ground truth** for `Schema`, `FunctionDeclaration` and `FunctionCallingConfig`. Read at revision `20260816`. |
 | <https://aiplatform.googleapis.com/$discovery/rest?version=v1> | the Vertex AI equivalent, read at revision `20260808`. |
-| <https://cloud.google.com/vertex-ai/docs/reference/rest/v1/Schema> | the Vertex AI `Schema` reference. |
+| <https://cloud.google.com/vertex-ai/docs/reference/rest/v1/Schema> | the Vertex AI `Schema` reference (also client-rendered; the Vertex discovery document above was used for the field list). |
 | <https://ai.google.dev/gemini-api/docs/structured-output> | structured output, which is a different feature from function calling. |
 | <https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite> | the probe model's capability list ("Function calling: Supported") and its model code. |
 | <https://ai.google.dev/gemini-api/docs/pricing> | which current model is cheapest. |

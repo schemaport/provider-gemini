@@ -234,6 +234,40 @@ describe('transformations', () => {
     });
   });
 
+  it('never drops a boolean subschema silently', () => {
+    const tool: CanonicalTool = {
+      name: 'boolean_tool',
+      description: 'Boolean subschema fixture',
+      // Boolean subschemas are valid JSON Schema but core's `JsonSchema` type
+      // does not model them, so build this one the way a loaded file would.
+      inputSchema: JSON.parse('{"type":"object","properties":{"open":true,"closed":false}}') as JsonSchema,
+    };
+    expect(geminiProvider.compile(tool).ok).toBe(false);
+
+    const result = geminiProvider.compile(tool, { allowLossy: true });
+    expect(declaration(result).parameters?.properties).toEqual({ open: {}, closed: {} });
+    expect(
+      result.transformations.filter((item) =>
+        ['converted-true-subschema', 'widened-false-subschema'].includes(item.code),
+      ),
+    ).toEqual([
+      {
+        code: 'converted-true-subschema',
+        path: 'inputSchema.properties.open',
+        detail:
+          'Emitted the `true` subschema as an unconstrained Gemini schema; `true` already accepted every value.',
+        lossy: false,
+      },
+      {
+        code: 'widened-false-subschema',
+        path: 'inputSchema.properties.closed',
+        detail:
+          'Emitted the `false` subschema as an unconstrained Gemini schema; Gemini cannot express a subschema that accepts nothing.',
+        lossy: true,
+      },
+    ]);
+  });
+
   it('always names a path inside the canonical tool', () => {
     for (const tool of Object.values(FIXTURE_TOOLS)) {
       for (const item of geminiProvider.compile(tool, { allowLossy: true }).transformations) {

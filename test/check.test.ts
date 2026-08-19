@@ -177,6 +177,21 @@ describe('unsupported keywords', () => {
     expect(diagnostic.severity).toBe('warning');
   });
 
+  it('gemini/boolean-subschema is an error for a `false` subschema', () => {
+    const tool: CanonicalTool = {
+      name: 'boolean_tool',
+      description: 'Boolean subschema fixture',
+      // Boolean subschemas are valid JSON Schema but core's `JsonSchema` type
+      // does not model them, so build this one the way a loaded file would.
+      inputSchema: JSON.parse('{"type":"object","properties":{"open":true,"closed":false}}') as JsonSchema,
+    };
+    const diagnostic = find(tool, 'gemini/boolean-subschema');
+    expect(diagnostic.severity).toBe('error');
+    expect(diagnostic.compile.lossy).toBe(true);
+    expect(diagnostic.path).toBe('inputSchema.properties.closed');
+    expect(geminiProvider.check(tool).filter((i) => i.code === 'gemini/boolean-subschema')).toHaveLength(1);
+  });
+
   it('gemini/dropped-annotation-keyword is an info', () => {
     const diagnostic = find(
       toolWith({ type: 'string', examples: ['a'] }),

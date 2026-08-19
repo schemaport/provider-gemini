@@ -58,6 +58,8 @@ Nothing else is accepted, and the API rejects unknown fields.
 | `$ref` (recursive or dangling) | **no** | compilation is refused outright |
 | `$defs` / `definitions` | yes, via inlining | the map itself is removed after inlining |
 | `examples`, `$schema`, `$id`, `$anchor`, `$comment`, `readOnly`, `writeOnly`, `deprecated` | dropped, not lossy | annotations; they constrain no value |
+| `true` as a subschema | yes | emitted as an unconstrained `{}`, which accepts everything just as `true` did |
+| `false` as a subschema | **no, lossy** | Gemini has no way to say "no value is valid"; it becomes an unconstrained `{}` |
 | any other keyword | **no, lossy** | unknown fields are rejected by the API, so they are dropped and treated as constraining |
 
 ### Why int64 fields become strings
@@ -75,8 +77,14 @@ lost; the value is identical.
 the SDK uppercases lowercase input for you, but the SDK's own `Schema` type only
 accepts `Type`, and its converter throws on the literal string `'null'` while
 accepting `'NULL'`. Emitting the enum names is therefore the only form that is
-correct on every path, and it is stable: running the SDK's own conversion over
-SchemaPort output changes nothing.
+correct on every path.
+
+Reading that converter also suggests SchemaPort's output passes through it
+unchanged: uppercase types are idempotent, int64 strings fall through its
+verbatim branch, and the output never contains `additionalProperties`, `$schema`
+or a `type` next to an `anyOf`. That is an inference from the SDK source, not a
+tested guarantee — the converter is internal and not exported, so no test in this
+package asserts it.
 
 ## Compatibility rules
 
@@ -116,6 +124,7 @@ Compilation is refused unless `--allow-lossy` is passed.
 | `gemini/unsupported-const` (non-string value) | the pinned value |
 | `gemini/unsupported-type` | a `type` value that is not a Gemini `Type` |
 | `gemini/type-with-any-of` | the `type` of a subschema that also has union branches, because Gemini rejects both together |
+| `gemini/boolean-subschema` | a `false` subschema, which accepts nothing and has no Gemini equivalent |
 | `gemini/unsupported-keyword` | any other keyword with no Gemini field; SchemaPort assumes it constrains values |
 
 ### Warnings
@@ -162,6 +171,7 @@ compilation refuse without `--allow-lossy`.
 | `dropped-schema-definitions` | removes `$defs`/`definitions` after inlining |
 | `dropped-annotation-keyword` | drops an annotation keyword |
 | `dropped-open-additional-properties` | drops `additionalProperties: true`, which constrained nothing |
+| `converted-true-subschema` | emits a `true` subschema as an unconstrained `{}` |
 
 ### Constraint-destroying changes (`lossy: true`)
 
@@ -180,7 +190,18 @@ compilation refuse without `--allow-lossy`.
 | `dropped-non-string-enum` | an `enum` with non-string members |
 | `dropped-unknown-type` | a `type` value that is not a Gemini `Type` |
 | `dropped-type-beside-any-of` | `type` on a subschema that also has union branches |
+| `widened-false-subschema` | a `false` subschema, which accepted nothing |
 | `dropped-unsupported-keyword` | any other unrecognised keyword |
+
+## Documentation links on diagnostics
+
+Every diagnostic carries a `docsUrl`. Schema-field rules point at the
+function-calling guide, which is the page that states the subset rule and was
+verified to render it. Rules that come from a field description point at the
+discovery document, and rules that come from the SDK's own typings point at the
+SDK repository. The `ai.google.dev/api/caching#Schema` anchor is rendered client
+side and could not be confirmed during review, so it is listed as a source but
+is not used as a `docsUrl`.
 
 ## Known limitations
 

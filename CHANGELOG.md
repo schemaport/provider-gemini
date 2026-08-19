@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `geminiProvider`, implementing `SchemaPortProvider` with `id: 'gemini'`,
   `rulesReviewedAt: '2026-08-20'` and `apiKeyEnvVar: 'GEMINI_API_KEY'`.
-- `check()` with 26 compatibility rules, each carrying a stable `gemini/` code,
+- `check()` with 27 compatibility rules, each carrying a stable `gemini/` code,
   a path into the canonical tool and an official documentation URL:
   - blocking errors — `gemini/invalid-function-name`,
     `gemini/unresolvable-schema-reference`;
@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `gemini/unsupported-exclusive-maximum`, `gemini/unsupported-unique-items`,
     `gemini/unsupported-prefix-items`, `gemini/non-string-enum-values`,
     `gemini/unsupported-const` (non-string values), `gemini/unsupported-type`,
-    `gemini/type-with-any-of`, `gemini/unsupported-keyword`;
+    `gemini/type-with-any-of`, `gemini/boolean-subschema`,
+    `gemini/unsupported-keyword`;
   - warnings — `gemini/constraint-not-enforced`, `gemini/format-not-enforced`,
     `gemini/default-not-enforced`, `gemini/missing-function-description`,
     `gemini/function-name-leading-character`, `gemini/parameter-name-charset`,

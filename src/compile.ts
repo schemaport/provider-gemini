@@ -123,6 +123,32 @@ function geminiType(name: string): Type {
   return GEMINI_TYPE_NAMES[name] as Type;
 }
 
+/**
+ * Convert one child slot, which JSON Schema allows to be a boolean.
+ *
+ * Gemini has no boolean subschema, so `true` becomes an unconstrained object
+ * (identical meaning) and `false` becomes an unconstrained object too — which
+ * accepts everything where the canonical schema accepted nothing, and is
+ * therefore lossy.
+ */
+function convertChild(value: unknown, path: string, context: CompileContext): Schema | undefined {
+  const child = asSchema(value);
+  if (child) return convertSchema(child, path, context);
+  if (typeof value !== 'boolean') return undefined;
+
+  context.transformations.push(
+    transformation(
+      value ? 'converted-true-subschema' : 'widened-false-subschema',
+      path,
+      value
+        ? 'Emitted the `true` subschema as an unconstrained Gemini schema; `true` already accepted every value.'
+        : 'Emitted the `false` subschema as an unconstrained Gemini schema; Gemini cannot express a subschema that accepts nothing.',
+      !value,
+    ),
+  );
+  return {};
+}
+
 function convertSchema(input: JsonSchema, path: string, context: CompileContext): Schema {
   let source = input;
   let nullable = source.nullable === true;
@@ -199,15 +225,15 @@ function convertSchema(input: JsonSchema, path: string, context: CompileContext)
 
   if (Array.isArray(source.anyOf)) {
     source.anyOf.forEach((value, index) => {
-      const child = asSchema(value);
-      if (child) branches.push(convertSchema(child, joinPath(path, 'anyOf', index), context));
+      const branch = convertChild(value, joinPath(path, 'anyOf', index), context);
+      if (branch) branches.push(branch);
     });
   }
 
   if (Array.isArray(source.oneOf)) {
     source.oneOf.forEach((value, index) => {
-      const child = asSchema(value);
-      if (child) branches.push(convertSchema(child, joinPath(path, 'oneOf', index), context));
+      const branch = convertChild(value, joinPath(path, 'oneOf', index), context);
+      if (branch) branches.push(branch);
     });
     context.transformations.push(
       transformation(
@@ -246,8 +272,8 @@ function convertSchema(input: JsonSchema, path: string, context: CompileContext)
   if (isPlainObject(source.properties)) {
     const properties: Record<string, Schema> = {};
     for (const [name, value] of Object.entries(source.properties)) {
-      const child = asSchema(value);
-      if (child) properties[name] = convertSchema(child, joinPath(path, 'properties', name), context);
+      const child = convertChild(value, joinPath(path, 'properties', name), context);
+      if (child) properties[name] = child;
     }
     out.properties = properties;
   }
@@ -261,8 +287,10 @@ function convertSchema(input: JsonSchema, path: string, context: CompileContext)
     out.propertyOrdering = ordering as string[];
   }
 
-  const items = asSchema(source.items);
-  if (items) out.items = convertSchema(items, joinPath(path, 'items'), context);
+  if (source.items !== undefined) {
+    const items = convertChild(source.items, joinPath(path, 'items'), context);
+    if (items) out.items = items;
+  }
 
   let usedInt64 = false;
   for (const keyword of INT64_KEYWORDS) {

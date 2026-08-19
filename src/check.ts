@@ -35,7 +35,7 @@ import {
   UNENFORCED_CONSTRAINT_KEYWORDS,
 } from './rules.js';
 import { resolveReferences } from './resolve.js';
-import { isNullablePair } from './schema-shape.js';
+import { collectBooleanSubschemas, isNullablePair } from './schema-shape.js';
 
 const ROOT_PATH = 'inputSchema';
 
@@ -53,6 +53,7 @@ export function checkGeminiTool(tool: CanonicalTool): Diagnostic[] {
   checkReferences(resolved, add);
   checkParameterNames(resolved.schema, add);
   checkEmptyParameters(resolved.schema, add);
+  checkBooleanSubschemas(resolved.schema, add);
 
   for (const visit of collectSchemas(resolved.schema, ROOT_PATH)) {
     checkSubschema(visit.schema, visit.path, add);
@@ -74,7 +75,7 @@ function checkFunctionName(tool: CanonicalTool, add: Add): void {
         `${FUNCTION_NAME_MAX_LENGTH} characters.`,
       path: 'name',
       compile: notCompilable('Refused: renaming the tool would change the contract callers use.'),
-      docsUrl: DOC_URLS.functionDeclaration,
+      docsUrl: DOC_URLS.discovery,
     });
   } else if (!FUNCTION_NAME_START_PATTERN.test(tool.name)) {
     add({
@@ -86,7 +87,7 @@ function checkFunctionName(tool: CanonicalTool, add: Add): void {
         'reference does not mention it, so SchemaPort cannot tell whether it will be rejected.',
       path: 'name',
       compile: compilable('Emits the name unchanged.'),
-      docsUrl: DOC_URLS.vertexSchema,
+      docsUrl: DOC_URLS.vertexDiscovery,
     });
   }
 }
@@ -103,7 +104,7 @@ function checkFunctionDescription(tool: CanonicalTool, add: Add): void {
       'rejected. The model also uses it to decide when to call the tool.',
     path: 'description',
     compile: compilable('Emits the declaration without a description; SchemaPort never invents one.'),
-    docsUrl: DOC_URLS.functionDeclaration,
+    docsUrl: DOC_URLS.discovery,
   });
 }
 
@@ -121,7 +122,7 @@ function checkReferences(resolved: ReturnType<typeof resolveReferences>, add: Ad
           ? 'Refused: a recursive reference cannot be expanded into a finite schema.'
           : 'Refused: the reference does not point at a root-level `$defs` or `definitions` entry.',
       ),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 
@@ -132,7 +133,7 @@ function checkReferences(resolved: ReturnType<typeof resolveReferences>, add: Ad
       message: `Gemini has no \`$ref\` field, so \`${inlined.ref}\` cannot be sent as a reference.`,
       path: inlined.path,
       compile: compilable('Inlines the referenced schema; no constraint is lost.'),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 }
@@ -152,7 +153,7 @@ function checkParameterNames(root: JsonSchema, add: Add): void {
         'the Gemini Developer API reference does not state this, so the outcome is uncertain.',
       path: joinPath(ROOT_PATH, 'properties', name),
       compile: compilable('Emits the parameter name unchanged.'),
-      docsUrl: DOC_URLS.functionDeclaration,
+      docsUrl: DOC_URLS.sdk,
     });
   }
 }
@@ -193,8 +194,24 @@ function checkEmptyParameters(root: JsonSchema, add: Add): void {
       'unset for a function with no parameters, so SchemaPort omits the field entirely.',
     path: ROOT_PATH,
     compile: compilable('Emits a `FunctionDeclaration` with no `parameters` field.'),
-    docsUrl: DOC_URLS.functionDeclaration,
+    docsUrl: DOC_URLS.sdk,
   });
+}
+
+function checkBooleanSubschemas(root: JsonSchema, add: Add): void {
+  for (const entry of collectBooleanSubschemas(root, ROOT_PATH)) {
+    if (entry.value) continue;
+    add({
+      severity: 'error',
+      code: 'gemini/boolean-subschema',
+      message:
+        'A `false` subschema accepts no value at all, and every Gemini `Schema` is an object with ' +
+        'no way to say that. The compiled schema accepts anything here instead.',
+      path: entry.path,
+      compile: compilableLossy('Emits an unconstrained schema in place of `false`.'),
+      docsUrl: DOC_URLS.functionCalling,
+    });
+  }
 }
 
 function checkSubschema(schema: JsonSchema, path: string, add: Add): void {
@@ -227,7 +244,7 @@ function checkAdditionalProperties(schema: JsonSchema, path: string, add: Add): 
         ? 'Drops `additionalProperties: false`; the object stays open.'
         : 'Drops the `additionalProperties` schema; extra properties become unconstrained.',
     ),
-    docsUrl: DOC_URLS.schema,
+    docsUrl: DOC_URLS.functionCalling,
   });
 }
 
@@ -241,7 +258,7 @@ function checkOneOf(schema: JsonSchema, path: string, add: Add): void {
       'than one branch, which `oneOf` rejects.',
     path: joinPath(path, 'oneOf'),
     compile: compilableLossy('Emits the branches as `anyOf`, losing the exactly-one requirement.'),
-    docsUrl: DOC_URLS.schema,
+    docsUrl: DOC_URLS.functionCalling,
   });
 }
 
@@ -254,7 +271,7 @@ function checkDroppedKeywords(schema: JsonSchema, path: string, add: Add): void 
       message: `Gemini has no \`${rule.keyword}\` field, so ${rule.detail} cannot be expressed.`,
       path: joinPath(path, rule.keyword),
       compile: compilableLossy(`Drops \`${rule.keyword}\`; the constraint stops being expressed.`),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 }
@@ -273,7 +290,7 @@ function checkConst(schema: JsonSchema, path: string, add: Add): void {
     compile: convertible
       ? compilable('Emits `enum` with the single allowed value and `format: "enum"`.')
       : compilableLossy('Drops `const`; the value stops being pinned.'),
-    docsUrl: DOC_URLS.schema,
+    docsUrl: DOC_URLS.functionCalling,
   });
 }
 
@@ -290,7 +307,7 @@ function checkEnum(schema: JsonSchema, path: string, add: Add): void {
       'values on your behalf.',
     path: joinPath(path, 'enum'),
     compile: compilableLossy('Drops `enum`; the value stops being restricted to the listed set.'),
-    docsUrl: DOC_URLS.schema,
+    docsUrl: DOC_URLS.functionCalling,
   });
 }
 
@@ -304,7 +321,7 @@ function checkTypes(schema: JsonSchema, path: string, add: Add): void {
       message: `\`${type}\` is not one of the Gemini \`Type\` enum values.`,
       path: joinPath(path, 'type'),
       compile: compilableLossy('Drops the unknown type; the value stops being type-constrained.'),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 
@@ -319,7 +336,7 @@ function checkTypes(schema: JsonSchema, path: string, add: Add): void {
         'is not documented.',
       path: joinPath(path, 'type'),
       compile: compilable('Emits one `anyOf` branch per type, mirroring the SDK conversion.'),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 }
@@ -337,7 +354,7 @@ function checkTypeWithBranches(schema: JsonSchema, path: string, add: Add): void
       'type alongside union branches.',
     path: joinPath(path, 'type'),
     compile: compilableLossy('Drops `type` and keeps the branches; the type constraint is lost.'),
-    docsUrl: DOC_URLS.schema,
+    docsUrl: DOC_URLS.functionCalling,
   });
 }
 
@@ -350,7 +367,7 @@ function checkUnknownKeywords(schema: JsonSchema, path: string, add: Add): void 
         message: `\`${keyword}\` is an annotation Gemini has no field for. It constrains nothing, so dropping it changes no accepted value.`,
         path: joinPath(path, keyword),
         compile: compilable(`Drops \`${keyword}\`.`),
-        docsUrl: DOC_URLS.schema,
+        docsUrl: DOC_URLS.functionCalling,
       });
       continue;
     }
@@ -363,7 +380,7 @@ function checkUnknownKeywords(schema: JsonSchema, path: string, add: Add): void 
         'SchemaPort cannot tell whether it constrains values, so it is treated as constraining.',
       path: joinPath(path, keyword),
       compile: compilableLossy(`Drops \`${keyword}\`; anything it constrained stops being checked.`),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 }
@@ -394,7 +411,7 @@ function checkEnforcement(schema: JsonSchema, path: string, add: Add): void {
         'any value is allowed and most trigger no special behaviour, so it may not be enforced.',
       path: joinPath(path, 'format'),
       compile: compilable('Emits `format` unchanged.'),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 
@@ -407,7 +424,7 @@ function checkEnforcement(schema: JsonSchema, path: string, add: Add): void {
         'schemas carrying it are not rejected, and that it does not affect validation.',
       path: joinPath(path, 'default'),
       compile: compilable('Emits `default` unchanged.'),
-      docsUrl: DOC_URLS.schema,
+      docsUrl: DOC_URLS.functionCalling,
     });
   }
 }
