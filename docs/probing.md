@@ -33,17 +33,17 @@ card lists "Function calling: Supported"
 (<https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite>).
 
 ```sh
-SCHEMAPORT_GEMINI_MODEL=gemini-3.7-flash schemaport probe ./tools/refund_order.json --target gemini
+SCHEMAPORT_GEMINI_MODEL=gemini-3.7-flash schemaport probe ./tools/refund_order.json --targets gemini
 ```
 
 ## Commands
 
 ```sh
 # Probe a tool with the default model
-schemaport probe ./tools/refund_order.json --target gemini
+schemaport probe ./tools/refund_order.json --targets gemini
 
 # Probe a tool whose compilation is lossy (it is refused without this flag)
-schemaport probe ./tools/tag_resource.json --target gemini --allow-lossy
+schemaport probe ./tools/tag_resource.json --targets gemini --allow-lossy
 ```
 
 Programmatically:
