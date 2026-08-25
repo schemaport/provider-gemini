@@ -142,6 +142,49 @@ is uncertain.
 | `gemini/parameter-name-charset` | a top-level parameter name is not `[A-Za-z_][A-Za-z0-9_]*` or is longer than 64 characters. The SDK typings and Vertex AI state this rule; the Developer API reference does not. |
 | `gemini/multi-type-union` | a multi-type `type` array is emitted as `anyOf` branches; whether sibling constraints still apply to each branch is undocumented. |
 
+### Turning constraints into enforcement with VALIDATED mode
+
+Every `gemini/constraint-not-enforced` warning has the same underlying cause and
+the same possible remedy, so it is worth stating once rather than per keyword.
+
+Gemini accepts `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`,
+`minItems`, `maxItems`, `minProperties` and `maxProperties` — SchemaPort emits
+them unchanged, and nothing is dropped. What is not promised is *enforcement*.
+Under the default `FunctionCallingConfig.mode = AUTO`, the documented behaviour
+is that the schema guides the model. Only `mode = VALIDATED` is documented to
+validate function calls with constrained decoding.
+
+That mode is a property of your **request**, not of the compiled tool, so
+SchemaPort cannot set it for you. It lives alongside `tools` in the
+`generateContent` call:
+
+```ts
+const response = await ai.models.generateContent({
+  model: 'gemini-2.5-flash-lite',
+  contents: 'Refund order ord_123',
+  config: {
+    tools: [{ functionDeclarations: [compiled] }],
+    toolConfig: {
+      functionCallingConfig: { mode: 'VALIDATED' },
+    },
+  },
+})
+```
+
+Two caveats before you reach for it:
+
+- SchemaPort has **not** verified this end to end. No live Gemini call has been
+  made from this repository, so treat the snippet as the documented shape rather
+  than a tested result. `schemaport probe --targets gemini` with your own key is
+  the way to confirm it against the current API.
+- The warning is still correct with `VALIDATED` set. SchemaPort reports what the
+  *compiled schema* guarantees on its own, and it cannot see your request
+  configuration.
+
+If you need a constraint enforced regardless of mode, validate the returned
+arguments yourself — `validateValue` from `@schemaport/core` checks a tool call
+against the canonical schema.
+
 ### Infos
 
 | Code | Why |
