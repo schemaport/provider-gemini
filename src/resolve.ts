@@ -34,7 +34,13 @@ export interface ResolveResult {
   problems: ReferenceProblem[];
 }
 
-/** Keyword slots holding a map of subschemas. */
+/**
+ * Keyword slots holding a map of subschemas.
+ *
+ * `$defs` and `definitions` are deliberately absent. They are the *targets* of
+ * inlining, not places to inline into: walking them would rewrite a definition
+ * that is about to be removed from the output anyway.
+ */
 const MAP_SLOTS = ['properties'] as const;
 /** Keyword slots holding an array of subschemas. */
 const LIST_SLOTS = ['prefixItems', 'anyOf', 'oneOf', 'allOf'] as const;
