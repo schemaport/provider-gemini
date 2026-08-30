@@ -36,7 +36,7 @@ Nothing else is accepted, and the API rejects unknown fields.
 | `nullable` | yes | passed through |
 | `properties` | yes | recursed into |
 | `required` | yes | passed through; optional stays optional |
-| `propertyOrdering` | yes | passed through if you set it; SchemaPort never invents one |
+| `propertyOrdering` | yes | passed through if you set it; generated on request — see [Property ordering](#property-ordering) |
 | `additionalProperties: false` | **no, lossy** | no field for it; the object stays open |
 | `additionalProperties: {schema}` | **no, lossy** | extra properties become unconstrained |
 | `additionalProperties: true` | dropped, not lossy | Gemini objects are open already |
@@ -215,6 +215,8 @@ compilation refuse without `--allow-lossy`.
 | `dropped-annotation-keyword` | drops an annotation keyword |
 | `dropped-open-additional-properties` | drops `additionalProperties: true`, which constrained nothing |
 | `converted-true-subschema` | emits a `true` subschema as an unconstrained `{}` |
+| `generated-property-ordering` | adds a `propertyOrdering` the schema did not declare |
+| `kept-declared-property-ordering` | keeps a declared ordering in a generating mode |
 
 ### Constraint-destroying changes (`lossy: true`)
 
@@ -235,6 +237,70 @@ compilation refuse without `--allow-lossy`.
 | `dropped-type-beside-any-of` | `type` on a subschema that also has union branches |
 | `widened-false-subschema` | a `false` subschema, which accepted nothing |
 | `dropped-unsupported-keyword` | any other unrecognised keyword |
+
+## Property ordering
+
+Gemini reads `propertyOrdering` to decide what order to emit object keys in.
+Without one the order is unspecified, so a schema that reads naturally to a
+person can come back with its fields shuffled.
+
+`compileGeminiTool` takes a mode:
+
+```ts
+compileGeminiTool(tool, { propertyOrdering: 'declaration' });
+compileGeminiTool(tool, { propertyOrdering: 'required-first' });
+```
+
+| Mode | Ordering |
+| --- | --- |
+| `preserve` *(default)* | Only what the schema declares. Nothing is generated. |
+| `declaration` | The canonical `properties` key order. |
+| `required-first` | Required properties in `required` order, then the rest in declaration order. |
+
+For
+
+```json
+{
+  "type": "object",
+  "properties": { "note": {}, "orderId": {}, "quantity": {} },
+  "required": ["orderId", "quantity"]
+}
+```
+
+`declaration` emits `["note", "orderId", "quantity"]` and `required-first`
+emits `["orderId", "quantity", "note"]`.
+
+Ordering is applied to **every** object schema, not just the root — nested
+objects and objects inside `items` get one too.
+
+### A declared ordering always wins
+
+The generating modes fill a gap; they never overrule an author. If the
+canonical schema declares `propertyOrdering`, that ordering is emitted
+unchanged even under `declaration` or `required-first`, and the compile
+records `kept-declared-property-ordering` so a caller who asked for an
+ordering and got a different one can see why.
+
+### Two details
+
+- **`required-first` skips a `required` entry that `properties` does not
+  declare.** `required: ["a", "ghost"]` with only `a` declared orders `["a"]`.
+  Naming `ghost` would order a key Gemini will never emit.
+- **An object with no properties gets no `propertyOrdering` at all.** An empty
+  array is not "no opinion" to Gemini — it would say to emit no keys.
+
+### Not lossy
+
+An ordering adds information and destroys no constraint, so both
+transformations are `lossy: false` and neither needs `--allow-lossy`.
+
+### Why this is opt-in
+
+Generating an ordering changes what the model emits, and SchemaPort does not
+invent schema content unprompted. But almost nobody writes `propertyOrdering`
+by hand, and the order they want is nearly always the order they already wrote
+the properties in — so the capability exists, behind a flag, and the default
+stays `preserve`.
 
 ## Documentation links on diagnostics
 
@@ -262,8 +328,12 @@ is not used as a `docsUrl`.
   enums as quoted strings (`{type:INTEGER, format:enum, enum:["101","201"]}`).
   SchemaPort will not change your value types on your behalf, so a non-string
   enum is reported as lossy instead.
-- **`propertyOrdering` is passed through, never generated.** Adding one would
-  change what the model emits, and SchemaPort does not invent schema content.
+- **`propertyOrdering` is never generated unless you ask.** The default
+  (`preserve`) emits only an ordering the schema already declares, because
+  generating one changes what the model emits and SchemaPort does not invent
+  schema content unprompted. `declaration` and `required-first` opt in to
+  generating one. A declared ordering always wins over a generated one — see
+  [Property ordering](#property-ordering).
 - **Only top-level parameter names are name-checked.** The naming rule
   SchemaPort found is stated for parameters, not for nested property names.
 - **Vertex AI is not a separate target.** Vertex AI's `Schema` additionally
