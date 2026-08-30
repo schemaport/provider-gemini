@@ -84,6 +84,22 @@ Two things to notice:
 | `tag_resource` | **refused** | `additionalProperties: {type: 'string'}` must be dropped |
 | `schedule_job` | **refused** | `multipleOf` has no Gemini field |
 
+## Property ordering
+
+Gemini leaves object key order unspecified unless the schema carries
+`propertyOrdering`. `compileGeminiTool` can generate one:
+
+```ts
+compileGeminiTool(tool, { propertyOrdering: 'declaration' });     // properties key order
+compileGeminiTool(tool, { propertyOrdering: 'required-first' });  // required first, then the rest
+```
+
+The default is `preserve`: emit only an ordering the schema already declares.
+Generating one changes what the model emits, so it stays opt-in — and a
+declared ordering always wins over a generated one. Applied to every object
+schema, not just the root, and never lossy. See
+[`docs/gemini-support.md`](docs/gemini-support.md#property-ordering).
+
 ## Documentation
 
 - [`docs/gemini-support.md`](docs/gemini-support.md) — every JSON Schema keyword

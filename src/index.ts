@@ -55,6 +55,7 @@ export default geminiProvider;
 
 export { checkGeminiTool, omitsParameters } from './check.js';
 export { compileGeminiTool } from './compile.js';
+export type { GeminiCompileOptions, PropertyOrderingMode } from './compile.js';
 export { probeGeminiTool } from './probe.js';
 export type { GeminiProbeClient } from './probe.js';
 export { resolveReferences } from './resolve.js';
