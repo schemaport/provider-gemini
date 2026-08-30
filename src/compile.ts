@@ -41,6 +41,30 @@ import {
 
 const ROOT_PATH = 'inputSchema';
 
+/**
+ * How `propertyOrdering` is produced.
+ *
+ * Gemini reads `propertyOrdering` to decide what order to emit object keys in.
+ * Absent one, the order is unspecified, and a schema that reads naturally to a
+ * person can come back with its fields shuffled.
+ *
+ * - `preserve` — emit only an ordering the canonical schema already declares.
+ *   The default, and what SchemaPort has always done.
+ * - `declaration` — order by the canonical `properties` key order.
+ * - `required-first` — required properties in `required` order, then the rest
+ *   in declaration order.
+ *
+ * A `propertyOrdering` the canonical schema declares always wins: the two
+ * generating modes fill a gap, they never overrule an author.
+ */
+export type PropertyOrderingMode = 'preserve' | 'declaration' | 'required-first';
+
+/** `CompileOptions` plus the Gemini-specific knobs. */
+export interface GeminiCompileOptions extends CompileOptions {
+  /** How to produce `propertyOrdering`. Defaults to `preserve`. */
+  propertyOrdering?: PropertyOrderingMode;
+}
+
 interface CompileContext {
   transformations: Transformation[];
   /** How many `type` values were rewritten to the Gemini `Type` enum name. */
@@ -48,16 +72,49 @@ interface CompileContext {
   /** Which int64 keywords were re-encoded as strings, and where. */
   int64Keywords: Set<string>;
   int64Paths: number;
+  /** Requested ordering mode. */
+  propertyOrdering: PropertyOrderingMode;
+  /** Subschemas that received a generated `propertyOrdering`. */
+  generatedOrderingPaths: string[];
+  /** Subschemas whose declared `propertyOrdering` was kept in a generating mode. */
+  keptOrderingPaths: string[];
+}
+
+/**
+ * Build a `propertyOrdering` for one object schema.
+ *
+ * Returns `[]` when there is nothing to order, which the caller reads as "emit
+ * no `propertyOrdering`" — an empty array would tell Gemini to emit no keys.
+ */
+function generatePropertyOrdering(
+  properties: Record<string, unknown>,
+  required: readonly string[] | undefined,
+  mode: PropertyOrderingMode,
+): string[] {
+  const declared = Object.keys(properties);
+  if (mode !== 'required-first') return declared;
+
+  // Only names that are actually declared: `required` may list a property that
+  // `properties` does not carry, and naming it here would order a key Gemini
+  // will never emit.
+  const first = (required ?? []).filter((name) => declared.includes(name));
+  return [...first, ...declared.filter((name) => !first.includes(name))];
 }
 
 /** Compile a canonical tool into a ready-to-send Gemini `FunctionDeclaration`. */
-export function compileGeminiTool(tool: CanonicalTool, options?: CompileOptions): CompileResult {
+export function compileGeminiTool(
+  tool: CanonicalTool,
+  options?: GeminiCompileOptions,
+): CompileResult {
   const resolved = resolveReferences(tool.inputSchema, ROOT_PATH);
   const context: CompileContext = {
     transformations: [...resolved.transformations],
     typeCaseCount: 0,
     int64Keywords: new Set(),
     int64Paths: 0,
+    propertyOrdering: options?.propertyOrdering ?? 'preserve',
+    generatedOrderingPaths: [],
+    keptOrderingPaths: [],
   };
 
   const output: FunctionDeclaration = { name: tool.name };
@@ -92,6 +149,30 @@ export function compileGeminiTool(tool: CanonicalTool, options?: CompileOptions)
         'normalized-type-case',
         ROOT_PATH,
         `Emitted ${context.typeCaseCount} \`type\` value${context.typeCaseCount === 1 ? '' : 's'} as Gemini \`Type\` enum names (\`string\` -> \`STRING\`).`,
+        false,
+      ),
+    );
+  }
+
+  if (context.generatedOrderingPaths.length > 0) {
+    const count = context.generatedOrderingPaths.length;
+    context.transformations.push(
+      transformation(
+        'generated-property-ordering',
+        context.generatedOrderingPaths[0] as string,
+        `Generated \`propertyOrdering\` at ${count} object schema${count === 1 ? '' : 's'} using the \`${context.propertyOrdering}\` mode. Gemini leaves key order unspecified without one.`,
+        false,
+      ),
+    );
+  }
+
+  if (context.keptOrderingPaths.length > 0) {
+    const count = context.keptOrderingPaths.length;
+    context.transformations.push(
+      transformation(
+        'kept-declared-property-ordering',
+        context.keptOrderingPaths[0] as string,
+        `Kept the \`propertyOrdering\` declared by the canonical schema at ${count} object schema${count === 1 ? '' : 's'}, rather than generating one. A declared ordering always wins.`,
         false,
       ),
     );
@@ -283,8 +364,27 @@ function convertSchema(input: JsonSchema, path: string, context: CompileContext)
   }
 
   const ordering = source['propertyOrdering'];
-  if (Array.isArray(ordering) && ordering.every((name) => typeof name === 'string')) {
-    out.propertyOrdering = ordering as string[];
+  const declaredOrdering =
+    Array.isArray(ordering) && ordering.every((name) => typeof name === 'string')
+      ? (ordering as string[])
+      : undefined;
+  const generating = context.propertyOrdering !== 'preserve';
+
+  if (declaredOrdering !== undefined) {
+    out.propertyOrdering = declaredOrdering;
+    // Worth reporting: the caller asked for an ordering and did not get the
+    // one they asked for, because the schema already had an opinion.
+    if (generating) context.keptOrderingPaths.push(path);
+  } else if (generating && out.properties !== undefined) {
+    const generated = generatePropertyOrdering(
+      out.properties,
+      out.required,
+      context.propertyOrdering,
+    );
+    if (generated.length > 0) {
+      out.propertyOrdering = generated;
+      context.generatedOrderingPaths.push(path);
+    }
   }
 
   if (source.items !== undefined) {
