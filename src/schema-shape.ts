@@ -35,6 +35,12 @@ export interface BooleanSubschema {
  * Gemini's `Schema` is always an object, so `true` and `false` have to be
  * re-expressed. `false` ("no value is valid") has no Gemini equivalent at all,
  * which is why `check()` reports it.
+ *
+ * The slot lists below are the same ones `resolve.ts` walks, minus
+ * `additionalProperties` — Gemini's `Schema` has no such field, so a boolean
+ * there is dropped by compile rather than re-expressed, and reporting it here
+ * would point at a keyword that never reaches the wire. If a slot is ever
+ * added to `resolve.ts`, it belongs here too.
  */
 export function collectBooleanSubschemas(root: JsonSchema, rootPath: string): BooleanSubschema[] {
   const found: BooleanSubschema[] = [];

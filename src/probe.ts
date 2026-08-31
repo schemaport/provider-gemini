@@ -68,8 +68,11 @@ export async function probeGeminiTool(
 
   const model = resolveProbeModel(options.model, PROBE_MODEL_ENV_VAR, DEFAULT_PROBE_MODEL);
 
-  // `CompileResult.output` is `unknown`; compileGeminiTool always writes a
-  // `FunctionDeclaration` there.
+  // `CompileResult.output` is `unknown` because it is the shared shape across
+  // four providers. The cast is safe here for a reason the type cannot carry:
+  // `compiled` came from `compileGeminiTool` a few lines up, and the guard
+  // above has already returned on both `ok: false` and an absent `output`, so
+  // what remains is the `FunctionDeclaration` that function writes.
   const declaration = compiled.output as FunctionDeclaration;
   const config: GenerateContentConfig = {
     tools: [{ functionDeclarations: [declaration] }],
